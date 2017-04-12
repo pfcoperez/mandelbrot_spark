@@ -23,6 +23,15 @@ object Primitives2D {
     def xRange: (T, T) = upperLeft.x -> bottomRight.x
     def yRange: (T, T) = upperLeft.y -> bottomRight.y
 
+    def area(implicit numericEvidence: Numeric[T]): T = {
+      import numericEvidence.mkNumericOps
+
+      val (xmin, xmax) = xRange
+      val (ymin, ymax) = yRange
+
+      (ymax-ymin)*(xmax-xmin)
+    }
+
   }
 
   case class PixelFrame(upperLeft: Pixel, bottomRight: Pixel) extends Frame[Long]
@@ -64,7 +73,7 @@ object Primitives2D {
       import scale._
       import p.{x => px, y => py}
 
-      require(pixelFrame contains p, s"$p out of $PixelFrame")
+      require(pixelFrame contains p, s"$p out of $pixelFrame")
 
       val (pxMin, pxMax) = pixelFrame.xRange
       val (pyMin, pyMax) = pixelFrame.yRange
