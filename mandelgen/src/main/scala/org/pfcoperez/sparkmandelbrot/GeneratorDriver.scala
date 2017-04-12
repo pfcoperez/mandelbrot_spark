@@ -47,4 +47,9 @@ object GeneratorDriver extends App {
 
   }
 
+  import com.datastax.spark.connector._
+  import org.apache.spark.sql.cassandra._
+
+  mandelbrotSet(partitionedSpaceRDD(setDimensions))
+
 }
