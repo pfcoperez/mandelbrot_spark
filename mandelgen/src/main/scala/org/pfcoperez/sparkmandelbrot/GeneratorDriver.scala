@@ -10,14 +10,14 @@ import org.pfcoperez.geometry.Primitives2D._
 object GeneratorDriver extends App {
 
   val maxIterations = 1000
-  val setDimensions = (2048L, 2048L)
+  val setDimensions = (2048, 2048)
   val appName = "MandelbrotSetGen"
   val master = "local[2]"
 
   val conf = new SparkConf().setAppName(appName).setMaster(master)
   val context = new SparkContext(conf)
 
-  def partitionedSpaceRDD(dimensions: (Long, Long)): RDD[(Long, Long)] = {
+  def partitionedSpaceRDD(dimensions: (Int, Int)): RDD[(Int, Int)] = {
     import context._
 
     val (w, h) = dimensions
@@ -26,10 +26,10 @@ object GeneratorDriver extends App {
     }
   }
 
-  def mandelbrotSet(space: RDD[(Long, Long)])(
+  def mandelbrotSet(space: RDD[(Int, Int)])(
     maxIterations: Int,
-    dimensions: (Long, Long)
-  ): RDD[((Long, Long), (Option[(Double, Double)], Int))] = {
+    dimensions: (Int, Int)
+  ): RDD[((Int, Int), (Option[(Double, Double)], Int))] = {
 
     import org.pfcoperez.iterativegen.MandelbrotSet.numericExploration
 
@@ -50,6 +50,7 @@ object GeneratorDriver extends App {
   import com.datastax.spark.connector._
   import org.apache.spark.sql.cassandra._
 
-  mandelbrotSet(partitionedSpaceRDD(setDimensions))
+
+  mandelbrotSet(partitionedSpaceRDD(setDimensions))(maxIterations, setDimensions)
 
 }

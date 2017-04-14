@@ -1,4 +1,4 @@
-CREATE TABLE mandelbrot.sets (
+CREATE TABLE mandelbrot.fractalset (
 	sector int,
 	x int,
 	y int,
