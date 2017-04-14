@@ -9,13 +9,14 @@ class ImageSectorPartitioner(sectorSize: (Int, Int), pixelFrame: PixelFrame) ext
     val sectorArea: Long = sectorSize.productIterator.reduce[Any] {
       case (a: Int, b: Int) => a.toLong*b.toLong
     }.asInstanceOf[Long]
-    (pixelFrame.area/sectorArea).toInt
+    (pixelFrame.area.toDouble/sectorArea.toDouble).ceil.toInt
   }
 
   override def getPartition(key: Any): Int = key match {
-    case p: Pixel =>
+    case (x: Int, y: Int) =>
       val asLongPairSectorSize = (sectorSize._1.toLong, sectorSize._2.toLong)
-      (sector(p, asLongPairSectorSize)(pixelFrame) % (Int.MaxValue.toLong+1L)).toInt
+      val p = Pixel(x, y)
+      sector(p, asLongPairSectorSize)(pixelFrame).toInt
   }
 
 }
