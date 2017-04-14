@@ -1,5 +1,7 @@
 package org.pfcoperez.sparkmandelbrot
 
+import com.datastax.spark.connector.cql.TableDef
+import com.datastax.spark.connector.writer.{RowWriter, RowWriterFactory}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 import org.pfcoperez.geometry.Primitives2D.PixelFrame
@@ -11,25 +13,46 @@ object GeneratorDriver extends App {
 
   val maxIterations = 1000
   val setDimensions = (2048, 2048)
+  val sectorDimensions = (1024, 1024)
   val appName = "MandelbrotSetGen"
   val master = "local[2]"
 
   val conf = new SparkConf().setAppName(appName).setMaster(master)
   val context = new SparkContext(conf)
 
-  def partitionedSpaceRDD(dimensions: (Int, Int)): RDD[(Int, Int)] = {
+  type Position = (Int, Int)
+  type Sector = Int
+  type SectorizedPosition = (Position, Sector)
+
+  def partitionedSpaceRDD(
+                           dimensions: (Int, Int),
+                           sectorDimensions: (Int, Int)
+                         ): RDD[SectorizedPosition] = {
     import context._
 
     val (w, h) = dimensions
-    (range(0, w-1L) cartesian range(0, h-1L)) partitionBy {
-      new ImageSectorPartitioner(setDimensions, PixelFrame(0L -> 0L, (w-1L, h-1L)))
+    val asLongPairSectorSize = sectorDimensions._1.toLong -> sectorDimensions._2.toLong
+
+    val frame = PixelFrame(0L -> 0L, (w-1L, h-1L))
+
+    (range(0, w-1) cartesian range(0, h-1)) map {
+      case (x: Long, y: Long) =>
+        (x.toInt, y.toInt) -> sector(x -> y, asLongPairSectorSize)(frame).toInt
+    } partitionBy {
+      new ImageSectorPartitioner(sectorDimensions, frame)
     }
   }
 
-  def mandelbrotSet(space: RDD[(Int, Int)])(
+  case class MandelbrotFeature(
+                                sector: Sector,
+                                state: Option[(Double, Double)],
+                                nIterations: Int
+                              )
+
+  def mandelbrotSet(space: RDD[SectorizedPosition])(
     maxIterations: Int,
     dimensions: (Int, Int)
-  ): RDD[((Int, Int), (Option[(Double, Double)], Int))] = {
+  ): RDD[(Position, MandelbrotFeature)] = {
 
     import org.pfcoperez.iterativegen.MandelbrotSet.numericExploration
 
@@ -40,9 +63,10 @@ object GeneratorDriver extends App {
       PixelFrame(0L -> 0L, (w-1L, h-1L))
     )
 
-    space map { case (x, y) =>
+    space map { case ((x, y), sector) =>
       val point: Point = Pixel(x, y)
-      (x, y) -> numericExploration(point.tuple, maxIterations)
+      val (st, niterations) = numericExploration(point.tuple, maxIterations)
+      (x, y) -> MandelbrotFeature(sector, st, niterations)
     }
 
   }
@@ -50,7 +74,37 @@ object GeneratorDriver extends App {
   import com.datastax.spark.connector._
   import org.apache.spark.sql.cassandra._
 
+  val result = mandelbrotSet(partitionedSpaceRDD(setDimensions, sectorDimensions))(maxIterations, setDimensions)
 
-  mandelbrotSet(partitionedSpaceRDD(setDimensions))(maxIterations, setDimensions)
+  /*implicit val rowWriterFactory: RowWriterFactory[(Position, MandelbrotFeature)] =
+    new RowWriterFactory[(Position, MandelbrotFeature)] {
+      override def rowWriter(
+                              table: TableDef,
+                              selectedColumns: IndexedSeq[ColumnRef]
+                            ): RowWriter[((Sector, Sector), MandelbrotFeature)] =
+      new RowWriterFactory[(Position, MandelbrotFeature)] {
+        override def rowWriter(table: TableDef, selectedColumns: IndexedSeq[ColumnRef]): RowWriter[((Sector, Sector), MandelbrotFeature)] = ???
+      }
+    }
+
+  result.saveToCassandra("mandelbrot", "fractalset",
+    SomeColumns(
+      "sector" as "_2.sector",
+      "x" as "_1._1",
+      "y" as "_1._2",
+      "iteration" as "_2.nIterations",
+      "state" as "_2.state"
+    )
+  )
+  */
+
+  val resultSize = result.collect().length
+
+  println(s"SIZE: $resultSize")
+
+  result map {
+    case ((x: Int, y: Int), MandelbrotFeature(sector, state, n)) =>
+      (sector, x, y, n)
+  } saveToCassandra("mandelbrot", "fractalset", SomeColumns("sector", "x", "y", "iteration"))
 
 }
