@@ -3,7 +3,7 @@ package org.pfcoperez.sparkmandelbrot.partitioners
 import org.apache.spark.Partitioner
 import org.pfcoperez.geometry.Primitives2D.{PixelFrame, Pixel, sector}
 
-class ImageSectorPartitioner(sectorSize: (Int, Int), pixelFrame: PixelFrame) extends Partitioner {
+class ImageSectorPartitioner(val sectorSize: (Int, Int), val pixelFrame: PixelFrame) extends Partitioner {
 
   override def numPartitions: Int = {
     val sectorArea: Long = sectorSize.productIterator.reduce[Any] {
@@ -19,4 +19,9 @@ class ImageSectorPartitioner(sectorSize: (Int, Int), pixelFrame: PixelFrame) ext
       sector(p, asLongPairSectorSize)(pixelFrame).toInt
   }
 
+  override def equals(obj: scala.Any): Boolean = obj match {
+    case that: ImageSectorPartitioner =>
+      that.sectorSize == sectorSize && that.pixelFrame == pixelFrame
+    case _ => false
+  }
 }
