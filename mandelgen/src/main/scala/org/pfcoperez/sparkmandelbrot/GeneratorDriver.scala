@@ -83,7 +83,10 @@ object GeneratorDriver extends App {
   result.foreachPartition {
     points: Iterator[(Position, MandelbrotFeature)] =>
       val (w, s) = GeneratorParameters.sectorDimensions
-      val partName = s"it${points.hashCode()}"
+
+      val ((sx, sy), MandelbrotFeature(sector, _, _)) = points.next()
+
+      val partName = s"sector${sector}at${sx}x$sy"
 
       val renderer: ImageCanvas = new BufferedImageCanvas(w, s)(partName)
       points foreach {
