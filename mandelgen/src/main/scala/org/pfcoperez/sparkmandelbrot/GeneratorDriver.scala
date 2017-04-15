@@ -12,9 +12,28 @@ import org.pfcoperez.sparkmandelbrot.imagetools.ImageCanvas
 import org.pfcoperez.sparkmandelbrot.imagetools.impl.BufferedImageCanvas
 
 object GeneratorParameters {
-  val maxIterations = 1000
-  val setDimensions = (4096, 4096)
-  val sectorDimensions = (2048, 2048)
+  val maxIterations = 3000
+  val setDimensions = (16384, 16384)
+  val sectorDimensions = (4096, 4096)
+
+  val colorPalette: Array[Int] = Seq(
+    "#226666",
+    "#669999",
+    "#407F7F",
+    "#0D4D4D",
+    "#003333",
+    "#2E4272",
+    "#7887AB",
+    "#4F628E",
+    "#162955",
+    "#061539",
+    "#2D882D",
+    "#88CC88",
+    "#55AA55",
+    "#116611",
+    "#004400"
+  ).map(colorStr => Integer.parseInt(colorStr.tail, 16)).toArray
+
 }
 
 object GeneratorDriver extends App {
@@ -66,7 +85,7 @@ object GeneratorDriver extends App {
     val (w, h) = dimensions
 
     implicit val scale: Scale = Scale(
-      RealFrame(-2.5 -> -1.0, 1.0 -> 1.0),
+      RealFrame(-0.7350 ->  0.1100, -0.7460 -> 0.1200),
       PixelFrame(0L -> 0L, (w-1L, h-1L))
     )
 
@@ -91,9 +110,12 @@ object GeneratorDriver extends App {
       val renderer: ImageCanvas = new BufferedImageCanvas(w, s)(partName)
       points foreach {
         case ((x, y), MandelbrotFeature(_, st, nIterations)) =>
-          val (r: Byte, g: Byte, b: Byte) =
-            st.map(_ => (0xff.toByte, 0xff.toByte, 0xff.toByte)).getOrElse((0.toByte, 0.toByte, 0.toByte))
-          renderer.drawPoint(x.toLong -> y.toLong)(r, g, b)
+          val color: Int =
+            st map { _ => 0
+            } getOrElse {
+              colorPalette(nIterations % colorPalette.size)
+            }
+          renderer.drawPoint(x.toLong -> y.toLong, color)
       }
       renderer.render(new File(s"/tmp/fractalparts/$partName.png"))
   }
