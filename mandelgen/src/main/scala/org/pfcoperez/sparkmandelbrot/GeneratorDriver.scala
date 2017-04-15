@@ -1,7 +1,5 @@
 package org.pfcoperez.sparkmandelbrot
 
-import com.datastax.spark.connector.cql.TableDef
-import com.datastax.spark.connector.writer.{RowWriter, RowWriterFactory}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 import org.pfcoperez.geometry.Primitives2D.PixelFrame
@@ -71,40 +69,11 @@ object GeneratorDriver extends App {
 
   }
 
-  import com.datastax.spark.connector._
-  import org.apache.spark.sql.cassandra._
-
   val result = mandelbrotSet(partitionedSpaceRDD(setDimensions, sectorDimensions))(maxIterations, setDimensions)
-
-  /*implicit val rowWriterFactory: RowWriterFactory[(Position, MandelbrotFeature)] =
-    new RowWriterFactory[(Position, MandelbrotFeature)] {
-      override def rowWriter(
-                              table: TableDef,
-                              selectedColumns: IndexedSeq[ColumnRef]
-                            ): RowWriter[((Sector, Sector), MandelbrotFeature)] =
-      new RowWriterFactory[(Position, MandelbrotFeature)] {
-        override def rowWriter(table: TableDef, selectedColumns: IndexedSeq[ColumnRef]): RowWriter[((Sector, Sector), MandelbrotFeature)] = ???
-      }
-    }
-
-  result.saveToCassandra("mandelbrot", "fractalset",
-    SomeColumns(
-      "sector" as "_2.sector",
-      "x" as "_1._1",
-      "y" as "_1._2",
-      "iteration" as "_2.nIterations",
-      "state" as "_2.state"
-    )
-  )
-  */
 
   val resultSize = result.collect().length
 
   println(s"SIZE: $resultSize")
 
-  result map {
-    case ((x: Int, y: Int), MandelbrotFeature(sector, state, n)) =>
-      (sector, x, y, n)
-  } saveToCassandra("mandelbrot", "fractalset", SomeColumns("sector", "x", "y", "iteration"))
 
 }
