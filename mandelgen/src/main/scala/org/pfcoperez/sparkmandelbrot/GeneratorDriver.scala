@@ -50,7 +50,7 @@ object GeneratorDriver extends App {
   type Sector = Int
   type SectorizedPosition = (Position, Sector)
 
-  def partitionedSpaceRDD(
+  def sectorsRDD(
                            dimensions: (Int, Int),
                            sectorDimensions: (Int, Int)
                          ): RDD[SectorizedPosition] = {
@@ -58,10 +58,11 @@ object GeneratorDriver extends App {
 
     val (w, h) = dimensions
     val asLongPairSectorSize = sectorDimensions._1.toLong -> sectorDimensions._2.toLong
+    val (sw, sh) = asLongPairSectorSize
 
     val frame = PixelFrame(0L -> 0L, (w-1L, h-1L))
 
-    (range(0, w-1) cartesian range(0, h-1)) map {
+    (range(0, w-1, sw) cartesian range(0, h-1, sh)) map {
       case (x: Long, y: Long) =>
         (x.toInt, y.toInt) -> sector(x -> y, asLongPairSectorSize)(frame).toInt
     } partitionBy {
@@ -69,54 +70,37 @@ object GeneratorDriver extends App {
     }
   }
 
-  case class MandelbrotFeature(
-                                sector: Sector,
-                                state: Option[(Double, Double)],
-                                nIterations: Int
-                              )
+  sectorsRDD(setDimensions, sectorDimensions) foreachPartition {
+    points: Iterator[(Position, Sector)] =>
 
-  def mandelbrotSet(space: RDD[SectorizedPosition])(
-    maxIterations: Int,
-    dimensions: (Int, Int)
-  ): RDD[(Position, MandelbrotFeature)] = {
+      import org.pfcoperez.iterativegen.MandelbrotSet.numericExploration
 
-    import org.pfcoperez.iterativegen.MandelbrotSet.numericExploration
-
-    val (w, h) = dimensions
-
-    implicit val scale: Scale = Scale(
-      RealFrame(-0.7350 ->  0.1100, -0.7460 -> 0.1200),
-      PixelFrame(0L -> 0L, (w-1L, h-1L))
-    )
-
-    space map { case ((x, y), sector) =>
-      val point: Point = Pixel(x, y)
-      val (st, niterations) = numericExploration(point.tuple, maxIterations)
-      (x, y) -> MandelbrotFeature(sector, st, niterations)
-    }
-
-  }
-
-  val result = mandelbrotSet(partitionedSpaceRDD(setDimensions, sectorDimensions))(maxIterations, setDimensions)
-
-  result.foreachPartition {
-    points: Iterator[(Position, MandelbrotFeature)] =>
-      val (w, s) = GeneratorParameters.sectorDimensions
-
-      val ((sx, sy), MandelbrotFeature(sector, _, _)) = points.next()
+      val (w, h) = setDimensions
+      val (sw, sh) = sectorDimensions
+      val ((sx, sy), sector) = points.next()
 
       val partName = s"sector${sector}at${sx}x$sy"
 
-      val renderer: ImageCanvas = new BufferedImageCanvas(w, s)(partName)
-      points foreach {
-        case ((x, y), MandelbrotFeature(_, st, nIterations)) =>
-          val color: Int =
-            st map { _ => 0
-            } getOrElse {
-              colorPalette(nIterations % colorPalette.size)
-            }
-          renderer.drawPoint(x.toLong -> y.toLong, color)
+      implicit val scale: Scale = Scale(
+        RealFrame(-0.7350 ->  0.1100, -0.7460 -> 0.1200),
+        PixelFrame(0L -> 0L, (w-1L, h-1L))
+      )
+
+      val renderer: ImageCanvas = new BufferedImageCanvas(sw, sh)(partName)
+
+      for(x <-sx until (sx+sw); y <- sy until (sy+sh)) {
+
+        val point: Point = Pixel(x.toLong, y.toLong)
+
+        val (st, nIterations) = numericExploration(point.tuple, GeneratorParameters.maxIterations)
+
+        val color: Int = st map { _ => 0 } getOrElse {
+          colorPalette(nIterations % colorPalette.size)
+        }
+
+        renderer.drawPoint(x.toLong -> y.toLong, color)
       }
+
       renderer.render(new File(s"/tmp/fractalparts/$partName.png"))
   }
 
