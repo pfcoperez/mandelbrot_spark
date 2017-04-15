@@ -1,19 +1,28 @@
 package org.pfcoperez.sparkmandelbrot
 
+import java.io.File
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 import org.pfcoperez.geometry.Primitives2D.PixelFrame
 import org.pfcoperez.sparkmandelbrot.partitioners.ImageSectorPartitioner
 import org.pfcoperez.geometry.Primitives2D.Implicits._
 import org.pfcoperez.geometry.Primitives2D._
+import org.pfcoperez.sparkmandelbrot.imagetools.ImageCanvas
+import org.pfcoperez.sparkmandelbrot.imagetools.impl.BufferedImageCanvas
+
+object GeneratorParameters {
+  val maxIterations = 1000
+  val setDimensions = (4096, 4096)
+  val sectorDimensions = (2048, 2048)
+}
 
 object GeneratorDriver extends App {
 
-  val maxIterations = 1000
-  val setDimensions = (2048, 2048)
-  val sectorDimensions = (1024, 1024)
   val appName = "MandelbrotSetGen"
-  val master = "local[2]"
+  val master = "local[4]"
+
+  import GeneratorParameters._
 
   val conf = new SparkConf().setAppName(appName).setMaster(master)
   val context = new SparkContext(conf)
@@ -57,7 +66,7 @@ object GeneratorDriver extends App {
     val (w, h) = dimensions
 
     implicit val scale: Scale = Scale(
-      RealFrame(-2.5 -> 1.0, -1.0 -> 1.0),
+      RealFrame(-2.5 -> -1.0, 1.0 -> 1.0),
       PixelFrame(0L -> 0L, (w-1L, h-1L))
     )
 
@@ -71,9 +80,20 @@ object GeneratorDriver extends App {
 
   val result = mandelbrotSet(partitionedSpaceRDD(setDimensions, sectorDimensions))(maxIterations, setDimensions)
 
-  val resultSize = result.collect().length
+  result.foreachPartition {
+    points: Iterator[(Position, MandelbrotFeature)] =>
+      val (w, s) = GeneratorParameters.sectorDimensions
+      val partName = s"it${points.hashCode()}"
 
-  println(s"SIZE: $resultSize")
+      val renderer: ImageCanvas = new BufferedImageCanvas(w, s)(partName)
+      points foreach {
+        case ((x, y), MandelbrotFeature(_, st, nIterations)) =>
+          val (r: Byte, g: Byte, b: Byte) =
+            st.map(_ => (0xff.toByte, 0xff.toByte, 0xff.toByte)).getOrElse((0.toByte, 0.toByte, 0.toByte))
+          renderer.drawPoint(x.toLong -> y.toLong)(r, g, b)
+      }
+      renderer.render(new File(s"/tmp/fractalparts/$partName.png"))
+  }
 
 
 }
