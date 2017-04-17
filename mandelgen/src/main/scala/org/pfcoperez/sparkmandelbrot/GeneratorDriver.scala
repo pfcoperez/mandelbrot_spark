@@ -14,7 +14,7 @@ import org.pfcoperez.sparkmandelbrot.imagetools.impl.BufferedImageCanvas
 object GeneratorParameters {
   val maxIterations = 3000
   val setDimensions = (16384, 16384)
-  val sectorDimensions = (4096, 4096)
+  val sectorDimensions = (1024, 1024)
 
   val colorPalette: Array[Int] = Seq(
     "#226666",
@@ -39,11 +39,12 @@ object GeneratorParameters {
 object GeneratorDriver extends App {
 
   val appName = "MandelbrotSetGen"
-  val master = "local[4]"
+  //val master = "local[4]"
 
   import GeneratorParameters._
 
-  val conf = new SparkConf().setAppName(appName).setMaster(master)
+  val conf = new SparkConf().setAppName(appName)
+  //val conf = new SparkConf().setAppName(appName).setMaster(master)
   val context = new SparkContext(conf)
 
   type Position = (Int, Int)
@@ -101,7 +102,7 @@ object GeneratorDriver extends App {
         renderer.drawPoint(x.toLong -> y.toLong, color)
       }
 
-      renderer.render(new File(s"/tmp/fractalparts/$partName.png"))
+      renderer.render(new File(s"/mnt/nfs/results/fractalparts/$partName.png"))
   }
 
 
