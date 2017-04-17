@@ -15,7 +15,7 @@ lazy val generator = (project in file("./mandelgen"))
   .settings(Common.settings: _*)
   .settings(
     libraryDependencies ++= Seq(
-      "org.apache.spark" %% "spark-core" % "2.1.0"
+      "org.apache.spark" %% "spark-core" % "2.1.0" % "provided"
     )
   )
   .dependsOn(math)
