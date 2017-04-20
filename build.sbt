@@ -22,6 +22,7 @@ lazy val generator = (project in file("./mandelgen"))
 
 lazy val viewer = (project in file("./mandelviewer"))
   .settings(Common.settings: _*)
+  .dependsOn(math)
 
 lazy val math = (project in file("./math"))
   .settings(Common.settings: _*)
