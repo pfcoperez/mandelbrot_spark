@@ -11,10 +11,7 @@ import org.pfcoperez.geometry.Primitives2D._
 import org.pfcoperez.sparkmandelbrot.imagetools.ImageCanvas
 import org.pfcoperez.sparkmandelbrot.imagetools.impl.BufferedImageCanvas
 
-object GeneratorParameters {
-  val maxIterations = 3000
-  val setDimensions = (16384, 16384)
-  val sectorDimensions = (1024, 1024)
+object GeneratorDriver extends App {
 
   val colorPalette: Array[Int] = Seq(
     "#226666",
@@ -34,76 +31,154 @@ object GeneratorParameters {
     "#004400"
   ).map(colorStr => Integer.parseInt(colorStr.tail, 16)).toArray
 
-}
-
-object GeneratorDriver extends App {
+  case class GeneratorConfig(
+                              mandelbrotRange: RealFrame = RealFrame(
+                                Point(-2.5, -1.0), Point(1.0, 1.0) //Whole set by default
+                              ),
+                              maxIterations: Int = 1000,
+                              resolution: (Int, Int) = (1890, 1080),
+                              sectorSize: (Int, Int) = (1890, 1080),
+                              outputDir: File = new File("/tmp"),
+                              providedSparkMaster: Option[String] = None
+                            )
 
   val appName = "MandelbrotSetGen"
-  //val master = "local[4]"
+  val argumentsParser = new scopt.OptionParser[GeneratorConfig](appName) {
+    head(appName)
 
-  import GeneratorParameters._
+    import scopt.Read
+    import scopt.Read._
 
-  val conf = new SparkConf().setAppName(appName)
-  //val conf = new SparkConf().setAppName(appName).setMaster(master)
-  val context = new SparkContext(conf)
-
-  type Position = (Int, Int)
-  type Sector = Int
-  type SectorizedPosition = (Position, Sector)
-
-  def sectorsRDD(
-                           dimensions: (Int, Int),
-                           sectorDimensions: (Int, Int)
-                         ): RDD[SectorizedPosition] = {
-    import context._
-
-    val (w, h) = dimensions
-    val asLongPairSectorSize = sectorDimensions._1.toLong -> sectorDimensions._2.toLong
-    val (sw, sh) = asLongPairSectorSize
-
-    val frame = PixelFrame(0L -> 0L, (w-1L, h-1L))
-
-    (range(0, w-1, sw) cartesian range(0, h-1, sh)) map {
-      case (x: Long, y: Long) =>
-        (x.toInt, y.toInt) -> sector(x -> y, asLongPairSectorSize)(frame).toInt
-    } partitionBy {
-      new ImageSectorPartitioner(sectorDimensions, frame)
+    implicit def pointRead[T](implicit reader: Read[T], numEvidence: Numeric[T]): Read[(T, T)] = new Read[(T, T)] {
+      val arity = 2
+      val reads = { (str: String) =>
+        require(str.startsWith("(") && str.endsWith(")"), "Required format: (v1,v2)")
+        val Seq(x, y) = str.tail.init.split(',').map(reader.reads(_))
+        x -> y
+      }
     }
+
+    val pointLabel = "(x,y)"
+    val sizeLabel = "(w,h)"
+
+    opt[(Double, Double)]("from") action { (x, c) =>
+      c.copy(mandelbrotRange = c.mandelbrotRange.copy(upperLeft = x))
+    } text pointLabel
+
+    opt[(Double, Double)]("to") action { (x, c) =>
+      c.copy(mandelbrotRange = c.mandelbrotRange.copy(bottomRight = x))
+    } text pointLabel
+
+    opt[Int]('i', "maxIterations") action { (x, c) =>
+      c.copy(maxIterations = x)
+    } validate { it =>
+      if (it <= 0) failure("Maximum number of iterations should be >0")
+      else success
+    }
+
+    opt[(Int, Int)]('s', "size") action { (x, c) =>
+      c.copy(resolution = x, sectorSize = x)
+    } text sizeLabel
+
+    opt[(Int, Int)]("sectorsize") action { (x, c) =>
+      c.copy(sectorSize = x)
+    } text sizeLabel
+
+    opt[String]("master") action { (x, c) =>
+      c.copy(providedSparkMaster = Some(x))
+    }
+
+    arg[File]("output") action { (x, c) =>
+      c.copy(outputDir = x)
+    } validate { of =>
+      if(of.isDirectory && of.canWrite) success
+      else failure("Output directory should exist")
+    }
+
+    checkConfig {
+      case GeneratorConfig(RealFrame(from, to), _, (w, h), (sw, sh), _, _) =>
+        if(from >= to) failure("Empty exploration area!")
+        else if(w < 0 || h < 0) failure("Invalid size")
+        else if(sw < 0 || sh < 0) failure("Invalid sector size")
+        else if(sw > w || sh > h) failure("Sectors can't be bigger than the global resolution")
+        else success
+    }
+
   }
 
-  sectorsRDD(setDimensions, sectorDimensions) foreachPartition {
-    points: Iterator[(Position, Sector)] =>
+  val generatorSettings = argumentsParser.parse(args, GeneratorConfig())
 
-      import org.pfcoperez.iterativegen.MandelbrotSet.numericExploration
+  generatorSettings foreach { config =>
 
-      val (w, h) = setDimensions
-      val (sw, sh) = sectorDimensions
-      val ((sx, sy), sector) = points.next()
+    import config._
 
-      val partName = s"sector${sector}at${sx}x$sy"
+    val conf = new SparkConf().setAppName(appName)
+    val context = new SparkContext(
+      providedSparkMaster.map(master => conf.setMaster(master)) getOrElse conf
+    )
 
-      implicit val scale: Scale = Scale(
-        RealFrame(-0.7350 ->  0.1100, -0.7460 -> 0.1200),
-        PixelFrame(0L -> 0L, (w-1L, h-1L))
-      )
+    type Position = (Int, Int)
+    type Sector = Int
+    type SectorizedPosition = (Position, Sector)
 
-      val renderer: ImageCanvas = new BufferedImageCanvas(sw, sh)(partName)
+    def sectorsRDD(
+                    dimensions: (Int, Int),
+                    sectorDimensions: (Int, Int)
+                  ): RDD[SectorizedPosition] = {
+      import context._
 
-      for(x <-sx until (sx+sw); y <- sy until (sy+sh)) {
+      val (w, h) = dimensions
+      val asLongPairSectorSize = sectorDimensions._1.toLong -> sectorDimensions._2.toLong
+      val (sw, sh) = asLongPairSectorSize
 
-        val point: Point = Pixel(x.toLong, y.toLong)
+      val frame = PixelFrame(0L -> 0L, (w-1L, h-1L))
 
-        val (st, nIterations) = numericExploration(point.tuple, GeneratorParameters.maxIterations)
+      (range(0, w-1, sw) cartesian range(0, h-1, sh)) map {
+        case (x: Long, y: Long) =>
+          (x.toInt, y.toInt) -> sector(x -> y, asLongPairSectorSize)(frame).toInt
+      } partitionBy {
+        new ImageSectorPartitioner(sectorDimensions, frame)
+      }
+    }
 
-        val color: Int = st map { _ => 0 } getOrElse {
-          colorPalette(nIterations % colorPalette.size)
+    sectorsRDD(resolution, sectorSize) foreachPartition {
+      points: Iterator[(Position, Sector)] =>
+
+        import org.pfcoperez.iterativegen.MandelbrotSet.numericExploration
+
+        val (w, h) = resolution
+        val (sw, sh) = sectorSize
+        val ((sx, sy), sector) = points.next()
+
+        val partName = s"sector${sector}at${sx}x$sy"
+
+        implicit val scale: Scale = Scale(
+          mandelbrotRange,
+          PixelFrame(0L -> 0L, (w-1L, h-1L))
+        )
+
+        val renderer: ImageCanvas = new BufferedImageCanvas(sw, sh)(partName)
+
+        for(x <-sx until (sx+sw); y <- sy until (sy+sh)) {
+
+          val point: Point = Pixel(x.toLong, y.toLong)
+
+          val (st, nIterations) = numericExploration(point.tuple, maxIterations)
+
+          val color: Int = st map { _ => 0 } getOrElse {
+            colorPalette(nIterations % colorPalette.size)
+          }
+
+          renderer.drawPoint(x.toLong -> y.toLong, color)
         }
 
-        renderer.drawPoint(x.toLong -> y.toLong, color)
-      }
+        renderer.render(new File(outputDir.getPath + File.separator + s"$partName.png"))
+    }
 
-      renderer.render(new File(s"/mnt/nfs/results/fractalparts/$partName.png"))
+    context.stop()
+
   }
 
+  System.exit(generatorSettings.map(_ => 0).getOrElse(-1))
 
 }

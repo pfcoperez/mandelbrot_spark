@@ -2,7 +2,20 @@ package org.pfcoperez.geometry
 
 object Primitives2D {
 
-  trait Vector[T] { val x: T; val y: T; def tuple: (T,T) = x -> y }
+  trait Vector[T] {
+    val x: T
+    val y: T
+    def tuple: (T,T) = x -> y
+
+    def equals(that: Vector[T]): Boolean = this.tuple == that.tuple
+    def <(that: Vector[T])(implicit ordEv: Ordering[T]): Boolean = {
+      import ordEv.mkOrderingOps
+      this.x < that.x && this.y < that.y
+    }
+    def >(that: Vector[T])(implicit ordEv: Ordering[T]): Boolean = that < this
+    def <=(that: Vector[T])(implicit ordEv: Ordering[T]): Boolean = this < that || this == that
+    def >=(that: Vector[T])(implicit ordEv: Ordering[T]): Boolean = this > that || this == that
+  }
 
   case class Pixel(x: Long, y: Long) extends Vector[Long]
   case class Point(x: Double, y: Double) extends Vector[Double]

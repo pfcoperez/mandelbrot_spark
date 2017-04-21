@@ -15,7 +15,8 @@ lazy val generator = (project in file("./mandelgen"))
   .settings(Common.settings: _*)
   .settings(
     libraryDependencies ++= Seq(
-      "org.apache.spark" %% "spark-core" % "2.1.0" % "provided"
+      "org.apache.spark" %% "spark-core" % "2.1.0" % "provided",
+      "com.github.scopt" %% "scopt" % Versions.scopt
     )
   )
   .dependsOn(math)
@@ -24,7 +25,7 @@ lazy val viewer = (project in file("./mandelviewer"))
   .settings(Common.settings: _*)
   .settings(
     libraryDependencies ++= Seq(
-      "com.github.scopt" %% "scopt" % "3.5.0"
+      "com.github.scopt" %% "scopt" % Versions.scopt
     )
   )
   .dependsOn(math)
