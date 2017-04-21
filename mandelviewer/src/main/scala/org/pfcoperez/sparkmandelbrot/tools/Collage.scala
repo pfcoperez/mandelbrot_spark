@@ -12,11 +12,11 @@ object Collage extends App {
   val argumentsParser = new scopt.OptionParser[CollageConfig](appName) {
     head(appName)
 
-    arg[File]("<dir>") action { (f, config) =>
+    arg[File]("<dir>").text("Directory containing the image tiles") action { (f, config) =>
       config.copy(imagesDir = f)
     }
 
-    opt[Double]('z', "zoom") action { (zoom, config) =>
+    opt[Double]('z', "zoom").text("Zoom ratio for the output image") action { (zoom, config) =>
       config.copy(sizeRatio = zoom)
     }
 
