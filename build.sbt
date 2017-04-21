@@ -22,6 +22,11 @@ lazy val generator = (project in file("./mandelgen"))
 
 lazy val viewer = (project in file("./mandelviewer"))
   .settings(Common.settings: _*)
+  .settings(
+    libraryDependencies ++= Seq(
+      "com.github.scopt" %% "scopt" % "3.5.0"
+    )
+  )
   .dependsOn(math)
 
 lazy val math = (project in file("./math"))
