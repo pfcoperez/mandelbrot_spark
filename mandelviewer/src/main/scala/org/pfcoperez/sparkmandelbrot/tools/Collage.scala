@@ -43,7 +43,7 @@ object Collage extends App {
             val rowHeader = if(sector % nSectorsRow == 0) "</tr><tr>" else ""
 
             val cell = s"""
-                          |<td>
+                          |<td width="$tileW" height="$tileH">
                           |  <a href="$fileName">
                           |    <img src="$fileName" width="${tileW}px" height="${tileH}px">
                           |  </a>

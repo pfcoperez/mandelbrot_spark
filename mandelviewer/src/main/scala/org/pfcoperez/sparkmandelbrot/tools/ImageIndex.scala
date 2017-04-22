@@ -31,7 +31,7 @@ class ImageIndex(directory: File) {
         } getOrElse matrix
     }
 
-  val nSectors = sectionMatrix(0).size -> sectionMatrix.size
+  val nSectors =  sectionMatrix.size -> sectionMatrix(0).size
 
   val sectorsPositions: Seq[(Int, Pixel)] = {
     for {
