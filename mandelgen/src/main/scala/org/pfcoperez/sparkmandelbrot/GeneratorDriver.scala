@@ -11,7 +11,7 @@ import org.pfcoperez.geometry.Primitives2D._
 import org.pfcoperez.sparkmandelbrot.imagetools.ImageCanvas
 import org.pfcoperez.sparkmandelbrot.imagetools.impl.BufferedImageCanvas
 
-object GeneratorDriver extends App {
+object Colors {
 
   val colorPalette: Array[Int] = Seq(
     "#226666",
@@ -30,6 +30,12 @@ object GeneratorDriver extends App {
     "#116611",
     "#004400"
   ).map(colorStr => Integer.parseInt(colorStr.tail, 16)).toArray
+
+  def colorFor(n: Int): Int = colorPalette(n % colorPalette.size)
+
+}
+
+object GeneratorDriver extends App {
 
   case class GeneratorConfig(
                               mandelbrotRange: RealFrame = RealFrame(
@@ -110,6 +116,15 @@ object GeneratorDriver extends App {
 
   generatorSettings foreach { config =>
 
+    println {
+      s"""
+         |Starting Mandelbrot Set exploration
+         |-----------------------------------
+         |$config
+         |
+      """.stripMargin
+    }
+
     import config._
 
     val conf = new SparkConf().setAppName(appName)
@@ -165,17 +180,13 @@ object GeneratorDriver extends App {
 
           val (st, nIterations) = numericExploration(point.tuple, maxIterations)
 
-          val color: Int = st map { _ => 0 } getOrElse {
-            colorPalette(nIterations % colorPalette.size)
-          }
+          val color: Int = st map { _ => 0 } getOrElse Colors.colorFor(nIterations)
 
           renderer.drawPoint(x.toLong -> y.toLong, color)
         }
 
         renderer.render(new File(outputDir.getPath + File.separator + s"$partName.png"))
     }
-
-    context.stop()
 
   }
 
