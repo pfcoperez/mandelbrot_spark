@@ -58,14 +58,13 @@ object GeneratorDriver extends App {
     implicit def pointRead[T](implicit reader: Read[T], numEvidence: Numeric[T]): Read[(T, T)] = new Read[(T, T)] {
       val arity = 2
       val reads = { (str: String) =>
-        require(str.startsWith("(") && str.endsWith(")"), "Required format: (v1,v2)")
-        val Seq(x, y) = str.tail.init.split(',').map(reader.reads(_))
+        val Seq(x, y) = str.split('_').map(reader.reads(_))
         x -> y
       }
     }
 
-    val pointLabel = "(x,y)"
-    val sizeLabel = "(w,h)"
+    val pointLabel = "x_y"
+    val sizeLabel = "w_h"
 
     opt[(Double, Double)]("from") action { (x, c) =>
       c.copy(mandelbrotRange = c.mandelbrotRange.copy(upperLeft = x))
