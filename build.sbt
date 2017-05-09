@@ -4,6 +4,7 @@ version := "0.1"
 organization := "org.pfcoperez"
 scalaVersion := "2.11.8"
 
+
 lazy val root = (project in file("."))
   .aggregate(
     math,
@@ -15,7 +16,7 @@ lazy val generator = (project in file("./mandelgen"))
   .settings(Common.settings: _*)
   .settings(
     libraryDependencies ++= Seq(
-      "org.apache.spark" %% "spark-core" % "2.1.0" % "provided",
+      "org.apache.spark" %% "spark-core" % Versions.spark % "provided",
       "com.github.scopt" %% "scopt" % Versions.scopt
     )
   )
