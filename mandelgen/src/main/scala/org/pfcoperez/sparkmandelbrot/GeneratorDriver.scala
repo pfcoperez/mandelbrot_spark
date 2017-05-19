@@ -167,25 +167,32 @@ object GeneratorDriver extends App {
 
         val partName = s"sector${sector}at${sx}x$sy"
 
-        implicit val scale: Scale = Scale(
-          mandelbrotRange,
-          PixelFrame(0L -> 0L, (w-1L, h-1L))
-        )
+        val outputFile = new File(outputDir.getPath + File.separator + s"$partName.png")
 
-        val renderer: ImageCanvas = new BufferedImageCanvas(sw, sh)(partName)
+        if(outputFile.exists()) println(s"Skipping >$partName< as previous work has been found")
+        else {
 
-        for(x <-sx until (sx+sw); y <- sy until (sy+sh)) {
+          implicit val scale: Scale = Scale(
+            mandelbrotRange,
+            PixelFrame(0L -> 0L, (w-1L, h-1L))
+          )
 
-          val point: Point = Pixel(x.toLong, y.toLong)
+          val renderer: ImageCanvas = new BufferedImageCanvas(sw, sh)(partName)
 
-          val (st, nIterations) = numericExploration(point.tuple, maxIterations)
+          for(x <-sx until (sx+sw); y <- sy until (sy+sh)) {
 
-          val color: Int = st map { _ => 0 } getOrElse Colors.colorFor(nIterations)
+            val point: Point = Pixel(x.toLong, y.toLong)
 
-          renderer.drawPoint(x.toLong -> y.toLong, color)
+            val (st, nIterations) = numericExploration(point.tuple, maxIterations)
+
+            val color: Int = st map { _ => 0 } getOrElse Colors.colorFor(nIterations)
+
+            renderer.drawPoint(x.toLong -> y.toLong, color)
+          }
+
+          renderer.render(outputFile)
+
         }
-
-        renderer.render(new File(outputDir.getPath + File.separator + s"$partName.png"))
     }
 
   }
