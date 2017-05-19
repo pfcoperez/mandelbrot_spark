@@ -81,7 +81,7 @@ The command above will start out Spark application within the cluster, thus allo
 # Sectors and partitions, the magic resides in the partitioner...
 
 The fact that this generator dumps its results in tiles, called sectors, matching a given grid is the secret behind being able to generate images within the same machine and, therefore, behind providing a shuffle free distributed algorithm.
-As the application uses a custom partitioner for K-V RDDs where K is `(Long, Long)` and represents a pixel in the whole resulting image, it is possible to use `foreachPartition` as  way of consolidating contiguous areas into a single output file.
+As the application uses a custom partitioner for K-V RDDs where K is `(Int, Int)` and represents a pixel in the whole resulting image, it is possible to use `foreachPartition` as  way of consolidating contiguous areas into a single output file.
 
 ```scala
   override def numPartitions: Int = {
