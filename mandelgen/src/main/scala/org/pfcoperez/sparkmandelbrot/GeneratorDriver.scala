@@ -2,6 +2,7 @@ package org.pfcoperez.sparkmandelbrot
 
 import java.io.File
 
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.{SparkConf, SparkContext}
 import org.pfcoperez.geometry.Primitives2D.PixelFrame
@@ -45,7 +46,8 @@ object GeneratorDriver extends App {
                               resolution: (Int, Int) = (1890, 1080),
                               sectorSize: (Int, Int) = (1890, 1080),
                               outputDir: File = new File("/tmp"),
-                              providedSparkMaster: Option[String] = None
+                              providedSparkMaster: Option[String] = None,
+                              manifestFile: Option[File] = None
                             )
 
   val appName = "MandelbrotSetGen"
@@ -94,6 +96,13 @@ object GeneratorDriver extends App {
       c.copy(providedSparkMaster = Some(x))
     }
 
+    opt[File]("skiplist") action { (x, c) =>
+      c.copy(manifestFile = Some(x))
+    } validate { of =>
+      if(of.isFile() && of.canRead()) success
+      else failure("Invalid provided skip list manifest file")
+    }
+
     arg[File]("output") action { (x, c) =>
       c.copy(outputDir = x)
     } validate { of =>
@@ -102,7 +111,7 @@ object GeneratorDriver extends App {
     }
 
     checkConfig {
-      case GeneratorConfig(RealFrame(from, to), _, (w, h), (sw, sh), _, _) =>
+      case GeneratorConfig(RealFrame(from, to), _, (w, h), (sw, sh), _, _, _) =>
         if(from >= to) failure("Empty exploration area!")
         else if(w < 0 || h < 0) failure("Invalid size")
         else if(sw < 0 || sh < 0) failure("Invalid sector size")
@@ -136,6 +145,16 @@ object GeneratorDriver extends App {
     type Sector = Int
     type SectorizedPosition = (Position, Sector)
 
+    val skipByManifest: Broadcast[Set[Int]] = context broadcast {
+      {
+        for {
+          manifestFile <- config.manifestFile.toSeq
+          line <- scala.io.Source.fromFile(manifestFile).getLines()
+          number = line.toInt
+        } yield number
+      } toSet
+    }
+
     def sectorsRDD(
                     dimensions: (Int, Int),
                     sectorDimensions: (Int, Int)
@@ -161,15 +180,18 @@ object GeneratorDriver extends App {
 
         import org.pfcoperez.iterativegen.MandelbrotSet.numericExploration
 
+        val skipSet: Set[Int] = skipByManifest.value
+
         val (w, h) = resolution
         val (sw, sh) = sectorSize
         val ((sx, sy), sector) = points.next()
 
-        val partName = s"sector${sector}at${sx}x$sy"
 
+        val partName = s"sector${sector}at${sx}x$sy"
         val outputFile = new File(outputDir.getPath + File.separator + s"$partName.png")
 
-        if(outputFile.exists()) println(s"Skipping >$partName< as previous work has been found")
+        if(skipSet contains sector) println(s"Skipping sector >$sector< as it is included in the skip list")
+        else if(outputFile.exists()) println(s"Skipping >$partName< as previous work has been found")
         else {
 
           implicit val scale: Scale = Scale(
